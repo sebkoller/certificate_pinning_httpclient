@@ -20,7 +20,7 @@ final client = IOClient(CertificatePinningHttpClient(
 
 // with Dio
 final _dio = Dio();
-(_dio.httpClientAdapter as DefaultHttpClientAdapter).onHttpClientCreate =
+(_dio.httpClientAdapter as IOHttpClientAdapter).onHttpClientCreate =
     (client) => CertificatePinningHttpClient(
         ["S4kZuhQQ1DPcMOCYFQXD0gG+UW0zmyVx6roNWpRl65I="]);
 
