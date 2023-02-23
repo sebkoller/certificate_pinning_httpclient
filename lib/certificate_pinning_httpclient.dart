@@ -31,12 +31,13 @@ class _CertificatePinningService {
         final arguments = <String, String>{
           "url": url.toString(),
         };
-        final List<Object>? fetchedHostCertificates =
+        final List<Object?>? fetchedHostCertificates =
             await _channel.invokeMethod('fetchHostCertificates', arguments);
         if (fetchedHostCertificates?.isNotEmpty ?? false) {
           // cache the obtained host certificates
           _hostCertificates[url.host] = fetchedHostCertificates
-              ?.map((c) => c as Uint8List)
+              ?.map((c) => c as Uint8List?)
+              .whereType<Uint8List>()
               .toList(growable: false);
         }
       } catch (err) {
