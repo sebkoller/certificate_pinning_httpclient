@@ -1,0 +1,31 @@
+name: certificate_pinning_httpclient_example
+description: Demonstrates how to use certificate_pinning_httpclient
+publish_to: 'none'
+
+environment:
+  sdk: '>=2.17.0 <3.0.0'
+  flutter: '>=3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  certificate_pinning_httpclient:
+    # When depending on this package from a real application you should use:
+    #   certificate_pinning_httpclient: ^x.y.z
+    # See https://dart.dev/tools/pub/dependencies#version-constraints
+    # The example app is bundled with the plugin, so we use a path dependency on
+    # the parent directory to use the current plugin's version.
+    path: ../
+
+  http: ^0.13.5
+  dio: ^5.0.0
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
