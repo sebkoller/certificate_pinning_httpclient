@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -184,6 +185,8 @@ class CertificatePinningHttpClient implements HttpClient {
   // indicates whether the HttpClient has been closed by calling close().
   bool _isClosed = false;
 
+  Completer<HttpClient>? _createClientCompleter;
+
   // state required to implement getters and setters required by the HttpClient interface
   Future<bool> Function(Uri url, String scheme, String? realm)? _authenticate;
   Future<ConnectionTask<Socket>> Function(
@@ -227,6 +230,9 @@ class CertificatePinningHttpClient implements HttpClient {
   /// @param url for which to set up pinning
   /// @return the new HTTP client
   Future<HttpClient> _createPinnedHttpClient(Uri url) async {
+    final completer = Completer<HttpClient>();
+    _createClientCompleter = completer;
+
     // construct a new http client
     HttpClient? newHttpClient;
     if (_validPins.isEmpty) {
@@ -267,6 +273,8 @@ class CertificatePinningHttpClient implements HttpClient {
     }
     newHttpClient.badCertificateCallback = _pinningFailureCallback;
 
+    completer.complete(newHttpClient);
+
     // provide the new http client with a pinned security context
     return newHttpClient;
   }
@@ -284,6 +292,10 @@ class CertificatePinningHttpClient implements HttpClient {
     // if already closed then just delegate
     if (_isClosed) {
       return _delegatePinnedHttpClient.open(method, host, port, path);
+    }
+
+    if(_createClientCompleter != null) {
+      await _createClientCompleter!.future;
     }
 
     // if we have an active connection to a different host we need to tear down the delegate
@@ -304,6 +316,10 @@ class CertificatePinningHttpClient implements HttpClient {
     // if already closed then just delegate
     if (_isClosed) {
       return _delegatePinnedHttpClient.openUrl(method, url);
+    }
+
+    if(_createClientCompleter != null) {
+      await _createClientCompleter!.future;
     }
 
     // if we have an active connection to a different host we need to tear down the delegate
