@@ -1,6 +1,6 @@
 name: certificate_pinning_httpclient
 description: An implementation of Dart's HttpClient with certificate pinning against SPKI hashes.
-version: 0.0.3
+version: 0.0.4
 repository: https://github.com/sebkoller/certificate_pinning_httpclient
 
 environment:
@@ -8,12 +8,12 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
-  asn1lib: ^1.4.0
-  crypto: ^3.0.2
+  asn1lib: ^1.5.3
+  crypto: ^3.0.5
   flutter:
     sdk: flutter
-  logger: ^1.0.0
-  pem: ^2.0.1
+  logger: ^2.6.0
+  pem: ^2.0.5
 
 dev_dependencies:
   lint: ^1.10.0
