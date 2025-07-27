@@ -38,7 +38,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String _httpError = "";
   String _dioError = "";
   static const String exampleComSpki =
-      "Xs+pjRp23QkmXeH31KEAjM1aWvxpHT6vYy+q2ltqtaM="; // might be out-of-date
+      "qBRjZmOmkSNJL0p70zek7odSIzqs/muR4Jk9xYyCP+E="; // might be out-of-date
 
   final _http = IOClient(CertificatePinningHttpClient([exampleComSpki]));
   final _dio = Dio();
