@@ -22,6 +22,7 @@ rootProject.allprojects {
 apply plugin: 'com.android.library'
 
 android {
+    namespace "dev.koller.certificate_pinning_httpclient"
     compileSdkVersion 29
 
     defaultConfig {
