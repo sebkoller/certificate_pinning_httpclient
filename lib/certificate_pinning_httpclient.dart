@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'package:asn1lib/asn1lib.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
@@ -197,6 +198,9 @@ class CertificatePinningHttpClient implements HttpClient {
   bool Function(X509Certificate cert, String host, int port)?
       _badCertificateCallback;
 
+  /// Prevent race condition when creating HttpClient.
+  var _isCreatingHttpClient = false;
+
   /// Pinning failure callback function for the badCertificateCallback of HttpClient. This is called if the pinning
   /// certificate check failed, which can indicate a certificate update on the server or a Man-in-the-Middle (MitM)
   /// attack. It invalidates the certificates for the given host so they will be refreshed and the communication with
@@ -281,6 +285,10 @@ class CertificatePinningHttpClient implements HttpClient {
   @override
   Future<HttpClientRequest> open(
       String method, String host, int port, String path) async {
+    if (_isCreatingHttpClient) {
+      await _waitUntilHttpClientCreated();
+    }
+
     // if already closed then just delegate
     if (_isClosed) {
       return _delegatePinnedHttpClient.open(method, host, port, path);
@@ -289,10 +297,14 @@ class CertificatePinningHttpClient implements HttpClient {
     // if we have an active connection to a different host we need to tear down the delegate
     // pinned HttpClient and create a new one with the correct pinning
     if (_connectedHost != host) {
+      _isCreatingHttpClient = true;
       final url = Uri(scheme: "https", host: host, port: port, path: path);
       final httpClient = await _createPinnedHttpClient(url);
       _delegatePinnedHttpClient.close();
       _delegatePinnedHttpClient = httpClient;
+      _isCreatingHttpClient = false;
+    } else {
+      _isCreatingHttpClient = false;
     }
 
     // delegate the open operation to the pinned http client
@@ -301,6 +313,10 @@ class CertificatePinningHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    if (_isCreatingHttpClient) {
+      await _waitUntilHttpClientCreated();
+    }
+
     // if already closed then just delegate
     if (_isClosed) {
       return _delegatePinnedHttpClient.openUrl(method, url);
@@ -309,13 +325,30 @@ class CertificatePinningHttpClient implements HttpClient {
     // if we have an active connection to a different host we need to tear down the delegate
     // pinned HttpClient and create a new one with the correct pinning
     if (_connectedHost != url.host) {
+      _isCreatingHttpClient = true;
       final httpClient = await _createPinnedHttpClient(url);
       _delegatePinnedHttpClient.close();
       _delegatePinnedHttpClient = httpClient;
+      _isCreatingHttpClient = false;
+    } else {
+      _isCreatingHttpClient = false;
     }
 
     // delegate the open operation to the pinned http client
     return _delegatePinnedHttpClient.openUrl(method, url);
+  }
+
+  /// Used this method to prevent a race condition when creating the HttpClient.
+  Future<void> _waitUntilHttpClientCreated() async {
+    if (_isCreatingHttpClient) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    if (_isCreatingHttpClient) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    if (_isCreatingHttpClient) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
   }
 
   @override
@@ -460,5 +493,6 @@ class CertificatePinningHttpClient implements HttpClient {
   void close({bool force = false}) {
     _delegatePinnedHttpClient.close(force: force);
     _isClosed = true;
+    _isCreatingHttpClient = false;
   }
 }
