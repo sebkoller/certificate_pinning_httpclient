@@ -17,22 +17,31 @@
 
 package dev.koller.certificate_pinning_httpclient;
 
-import java.net.URL;
-import java.security.cert.Certificate;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.net.ssl.HttpsURLConnection;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import java.net.URL;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
-import io.flutter.plugin.common.StandardMethodCodec;
-import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
+import io.flutter.plugin.common.StandardMethodCodec;
 
 // CertificatePinningHttpClientPlugin provides the bridge to the Approov SDK itself. Methods are initiated using the
 // MethodChannel to call various methods within the SDK. A facility is also provided to probe the certificates
@@ -72,11 +81,17 @@ public class CertificatePinningHttpClientPlugin implements FlutterPlugin, Method
                 connection.setConnectTimeout(FETCH_CERTIFICATES_TIMEOUT_MS);
                 connection.connect();
                 Certificate[] certificates = connection.getServerCertificates();
+
                 final List<byte[]> hostCertificates = new ArrayList<>(certificates.length);
+
                 for (Certificate certificate : certificates) {
                     hostCertificates.add(certificate.getEncoded());
                 }
+
                 connection.disconnect();
+
+                addRootExplicitlyIfNeeded(certificates, hostCertificates);
+
                 result.success(hostCertificates);
             } catch (Exception e) {
                 result.error("fetchHostCertificates", e.getLocalizedMessage(), null);
@@ -84,6 +99,77 @@ public class CertificatePinningHttpClientPlugin implements FlutterPlugin, Method
         } else {
             result.notImplemented();
         }
+    }
+
+    /**
+     * Add the root certificate explicitly if it is not already in the server's chain
+     * @param certificates The server's certificate chain
+     * @param hostCertificates The list of public keys against which the client can pin
+     * @throws CertificateEncodingException If the certificate encoding fails
+     */
+    private void addRootExplicitlyIfNeeded(Certificate[] certificates, List<byte[]> hostCertificates) throws CertificateEncodingException {
+        final X509Certificate[] acceptedIssuers = getAcceptedIssuers();
+
+        // Get the last certificate in the server's chain
+        X509Certificate lastServerCertificate = (X509Certificate) certificates[certificates.length - 1];
+
+        boolean lastCertIsAcceptedRoot = isAcceptedCert(acceptedIssuers, lastServerCertificate);
+
+        if (!lastCertIsAcceptedRoot) {
+            X509Certificate rootCertificate = findIssuer(acceptedIssuers, lastServerCertificate);
+
+            // If a matching root certificate was found, add its encoded value to the hostCertificates list
+            if (rootCertificate != null) {
+                hostCertificates.add(rootCertificate.getEncoded());
+            }
+        }
+    }
+
+    private X509Certificate[] getAcceptedIssuers() {
+        try {
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init((KeyStore) null);
+            TrustManager[] trustManagers = tmf.getTrustManagers();
+
+            // Check if we have a single X509TrustManager
+            if (trustManagers.length != 1 || !(trustManagers[0] instanceof X509TrustManager)) {
+                throw new IllegalStateException("Unexpected default trust managers: " + Arrays.toString(trustManagers));
+            }
+
+            X509TrustManager trustManager = (X509TrustManager) trustManagers[0];
+            return trustManager.getAcceptedIssuers();
+        } catch (Exception e) {
+            // Handle error
+            Log.e("CertificatePinning", "Error getting accepted issuers: " + e.getMessage());
+        }
+
+        return new X509Certificate[0];
+    }
+
+    private boolean isAcceptedCert(X509Certificate[] acceptedIssuers, X509Certificate targetCert) {
+        for (X509Certificate issuer : acceptedIssuers) {
+            if (issuer.getSubjectX500Principal().equals(targetCert.getSubjectX500Principal())
+                && issuer.getPublicKey().equals(targetCert.getPublicKey())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private X509Certificate findIssuer(X509Certificate[] acceptedIssuers, X509Certificate targetCert) {
+        for (X509Certificate issuer : acceptedIssuers) {
+            if (issuer.getSubjectX500Principal().equals(targetCert.getIssuerX500Principal())) {
+                try {
+                    targetCert.verify(issuer.getPublicKey());
+                    return issuer;
+                } catch (Exception e) {
+                    Log.e("CertificatePinning", "The certificate was not signed by the root CS found in trust store: " + e.getMessage());
+                }
+            }
+        }
+
+        return null;
     }
 
     @Override
